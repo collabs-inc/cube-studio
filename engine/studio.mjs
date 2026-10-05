@@ -9,7 +9,7 @@
 // so a piece previews on its own branch's engine (or the app's, where the project has none).
 //
 // Notes: you pin a note to a moment of a piece. Notes live in <state>/notes/<checkout>__<piece>.json, and every
-// new one goes to the Director (director.mjs), which hands it to whoever is working on that piece. Sessions
+// new one goes to the Director (the kit's persona, kit/persona.mjs), which hands it to whoever is working on that piece. Sessions
 // answer through the API:
 //   GET  /api/notes?key=<checkout>/<piece>                 → [{ id, t, fmt, file, text, status, reply, … }]
 //   POST /api/notes          { key, t, fmt, file, text }   → a new note (status "open")
@@ -24,11 +24,42 @@ import path from 'node:path';
 import { spawn, execFileSync, spawnSync } from 'node:child_process';
 import FFMPEG from 'ffmpeg-static';
 import { APP, HOME, STATE, projects, resolveIn, engineScript } from './paths.mjs';
-import { createDirector, nodeOptions } from './director.mjs';
+import { createRequire } from 'node:module';
+import { createPersona } from '../kit/persona.mjs';
 
 const ROOT = APP;
 const PORT = Number(process.env.PORT || 4173);
-const director = createDirector({ STATE, HOME, APP, port: PORT });
+// ---- the Director: the kit's persona, briefed with director/DIRECTOR.md, working in ~/Studio ----------------
+// Every node it (or a worker it starts) runs gets the engine overlay (overlay.mjs), and ffmpeg is the app's own.
+const nodeOptions = () => [process.env.NODE_OPTIONS, `--import=${new URL('./overlay.mjs', import.meta.url).href}`].filter(Boolean).join(' ');
+const ffmpegPath = () => { try { return process.env.FFMPEG || createRequire(import.meta.url)('ffmpeg-static'); } catch { return 'ffmpeg'; } };
+const URL_SELF = `http://127.0.0.1:${PORT}`;
+const director = createPersona({
+  name: 'Director',
+  dir: path.join(STATE, 'director'),
+  cwd: HOME,
+  brief: () => {
+    let text = '';
+    try { text = fs.readFileSync(path.join(APP, 'director', 'DIRECTOR.md'), 'utf8'); } catch {}
+    return text.replaceAll('{{APP}}', APP).replaceAll('{{HOME}}', HOME).replaceAll('{{STATE}}', STATE).replaceAll('{{URL}}', URL_SELF);
+  },
+  env: () => ({ STUDIO_APP: APP, STUDIO_HOME: HOME, STUDIO_STATE: STATE, STUDIO_URL: URL_SELF, NODE_OPTIONS: nodeOptions(), FFMPEG: ffmpegPath() }),
+  models: { claude: process.env.STUDIO_DIRECTOR_MODEL, codex: process.env.STUDIO_CODEX_MODEL },
+  // what you were looking at, so "make this bigger" needs no explanation
+  describe(c) {
+    const piece = c.key && compositions().find(x => x.key === c.key);
+    if (!piece) return '';
+    const bits = [`piece ${piece.key} (“${piece.title}”)`, `folder ${path.join(rootOf(piece.checkout), 'videos', piece.id)}`];
+    if (c.fmt) bits.push(`format ${c.fmt}${c.variant ? `, variant ${c.variant}` : ''}`);
+    if (c.t != null) bits.push(`at ${Number(c.t).toFixed(2)} s`);
+    bits.push(c.file ? `viewing the render ${c.file}` : 'viewing the live preview');
+    return `[Studio: the user is looking at ${bits.join('; ')}.]`;
+  },
+  eventPrompt: details => `[Studio: you supervise the render queue. ${details.length > 1 ? 'These renders ended' : 'A render ended'}:\n` +
+    details.map(d => `- ${d}`).join('\n') +
+    `\nQA what finished (frames, loudness, loops), fix and requeue what failed, and tell the user in a line or two what is ready to review. ` +
+    `If nothing needs doing, say so in one line.]`,
+});
 const FORMATS = ['16x9', '9x16', '1x1', '4x5'];
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.mp4': 'video/mp4', '.wav': 'audio/wav', '.bin': 'application/octet-stream' };
 
@@ -355,7 +386,7 @@ const inject = html => (/<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i,
 
 // The Studio's own page and assets come from the app; /wt/<checkout>/… from that checkout, with the app's
 // engine/, brand/ and node_modules/ behind the checkout's own (resolveIn).
-const APP_PATHS = /^\/(studio|brand|engine|node_modules)\//;
+const APP_PATHS = /^\/(studio|brand|engine|kit|node_modules)\//;
 function serveFile(req, res, url, p) {
   let root = APP, rel = p === '/' ? '/studio/index.html' : p, wt = null, file = null;
   const m = /^\/wt\/([^/]+)(\/.*)$/.exec(p);
@@ -450,15 +481,7 @@ function route(req, res) {
   let p;
   try { p = decodeURIComponent(url.pathname); } catch { return send(res, 400, 'bad url', 'text/plain'); }
   if (p === '/api/compositions') return send(res, 200, compositions());
-  if (p === '/api/director/stream') return director.stream(req, res);
-  if (p === '/api/director/send' && req.method === 'POST') return body(req, res, b => {
-    const c = b.context?.key ? compositions().find(x => x.key === b.context.key) : null;
-    const context = c ? { ...b.context, title: c.title, root: path.join(rootOf(c.checkout), 'videos', c.id) } : null;
-    send(res, 200, director.send(b.text, context));
-  });
-  if (p === '/api/director/stop' && req.method === 'POST') return send(res, 200, { stopped: director.stop() });
-  if (p === '/api/director/reset' && req.method === 'POST') { director.reset(); return send(res, 200, { ok: true }); }
-  if (p === '/api/director/agent' && req.method === 'POST') return body(req, res, b => send(res, 200, director.setAgent(String(b.agent || ''))));
+  if (director.route(req, res, p, '/api/director', { body, send })) return;
   if (p === '/api/studio') return send(res, 200, { home: HOME, state: STATE, app: APP, projects: projects(), director: director.status() });
   if (p === '/api/jobs') return send(res, 200, jobs.slice(-20).reverse());
   if (p === '/api/jobs/cancel' && req.method === 'POST') return body(req, res, b => {
@@ -530,7 +553,11 @@ function route(req, res) {
       const root = rootOf(c.checkout);
       const ev = { ...n, key: c.key, title: c.title, checkout: c.checkout, branch: c.branch, root, piece: path.join(root, 'videos', c.id) };
       fs.appendFileSync(path.join(STATE, 'inbox.jsonl'), JSON.stringify(ev) + '\n');
-      director.note(ev);
+      const where = `${ev.key}${ev.fmt ? ` (${ev.fmt})` : ''} at ${Number(ev.t || 0).toFixed(2)} s`;
+      director.inject(ev.text,
+        `[Studio: the user pinned note #${ev.id} on ${where}${ev.file ? `, on the render ${ev.file}` : ''}. Piece folder: ${ev.piece}. ` +
+        `Act on it, or hand it to whoever is working on that piece, and mark it with POST /api/notes/update (key "${ev.key}", id ${ev.id}).]\n\n${ev.text}`,
+        { context: { label: `Note · ${ev.title} · ${Number(ev.t || 0).toFixed(2)} s`, ref: { key: ev.key, t: ev.t, fmt: ev.fmt }, pin: true } });
       return send(res, 200, n);
     }
     const n = list.find(x => x.id === Number(b.id));
