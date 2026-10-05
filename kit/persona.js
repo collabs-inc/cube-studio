@@ -183,7 +183,9 @@ export function mountPersona(root, opts) {
     grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', up);
   });
   connect(); ui(); refreshContext();
-  return { say, refreshContext, focus: () => text.focus(), get busy() { return S.busy; } };
+  // put words in the composer for the user to finish, and focus it
+  const prefill = t => { text.value = t; grow(); ui(); text.focus(); text.setSelectionRange(t.length, t.length); };
+  return { say, prefill, refreshContext, rerender: render, focus: () => text.focus(), get busy() { return S.busy; } };
 }
 
 // The theme Cube asks for (?theme=light|dark), else the system's.
