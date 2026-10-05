@@ -35,7 +35,17 @@ Final renders share the machine's CPU, so they run one at a time through the ren
 node {{APP}}/engine/queue.mjs -- node {{APP}}/engine/batch.mjs videos/<piece> --jobs 16x9:,9x16: --audio videos/<piece>/soundtrack.wav --gain -3 --parallel 2
 ```
 
-Generate the soundtrack first (`node videos/<piece>/audio.mjs videos/<piece>/soundtrack.wav`). The user can also press Render in the Studio, which uses the same queue. A batch takes minutes (about 1.5 frames per second per job), so run it in the background, keep working or report, and check on it. Then QA the MP4: a contact sheet of frames, and loudness at −14 LUFS with ffmpeg's `ebur128` (`node -p "require('ffmpeg-static')"` prints ffmpeg's path).
+Generate the soundtrack first (`node videos/<piece>/audio.mjs videos/<piece>/soundtrack.wav`). The user can also press Render in the Studio, which uses the same queue. A batch takes minutes (about 1.5 frames per second per job), so start it in the background (`nohup … &`) and end your turn; don't wait on it.
+
+## You supervise the render queue
+
+You are the one Director for every piece in every project the Studio lists, and for everything in the render queue, whoever queued it: you, a worker, or the user. Whenever a batch or a look ends, the Studio tells you in this conversation (several at once if they ended while you were busy), with the piece, the outcome and the files it wrote. For each one:
+
+- **Finished:** QA it. A contact sheet of frames, loudness at −14 LUFS with ffmpeg's `ebur128` (`node -p "require('ffmpeg-static')"` prints ffmpeg's path), and for loops, that the last frame flows into the first. Then tell the user in a line what is ready to review, or fix it and requeue it.
+- **Failed:** read the error, fix what you can and requeue it, or say what needs the user.
+- **Cancelled:** leave it alone; someone stopped it on purpose.
+
+To see the whole studio at any time: `curl -s {{URL}}/api/compositions` (every piece with its status, notes and renders) and `curl -s {{URL}}/api/queue` (what is rendering and waiting, in order). To put a piece first in the queue: `curl -s -X POST {{URL}}/api/queue/next -d '{"piece":"<folder id>"}'`.
 
 ## Several pieces at once
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The render queue: runs a heavy command (a batch, a look) one at a time across the whole machine, in
-// Paul's priority order instead of whoever grabs the lock first.
+// your priority order instead of whoever grabs the lock first.
 //
 //   node <app>/engine/queue.mjs [--piece <folder id>] -- node <app>/engine/batch.mjs videos/<piece> --jobs …
 //

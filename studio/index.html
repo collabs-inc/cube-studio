@@ -13,8 +13,12 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 14px/1.45 Geist, system-ui, sans-serif; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
-.app { display: grid; grid-template-columns: var(--chat, 380px) 250px minmax(0, 1fr); height: 100%; }
-aside { border-right: 1px solid var(--line); padding: 18px 14px; overflow: auto; }
+.app { display: grid; grid-template-columns: var(--chat, 380px) minmax(0, 1fr) 340px; height: 100%; }
+aside { border-left: 1px solid var(--line); padding: 14px 12px 24px; overflow: auto; min-width: 0; }
+.sect { padding: 4px 4px 14px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+.sect:last-child { border-bottom: 0; }
+.sect h2 { font-size: 12px; font-weight: 600; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; text-transform: uppercase; }
+.sect .matrix { width: 100%; }
 .brand { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 600; padding: 4px 8px 18px; }
 .brand svg { width: 22px; height: 22px; }
 .comp { display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 10px; margin-bottom: 4px; }
@@ -42,7 +46,7 @@ aside { border-right: 1px solid var(--line); padding: 18px 14px; overflow: auto;
 @keyframes qspin { to { transform: rotate(360deg); } }
 .qbtn span { position: relative; font: 600 11.5px/1 "Geist Mono", monospace; }
 .aside-wrap { position: relative; }
-.queue { margin: 0; padding: 10px 10px 6px; border: 1px solid var(--line); border-radius: 12px; background: #1d1d20; }
+.queue { margin: 0; }
 .queue.pop { position: absolute; z-index: 30; width: 300px; max-height: 70vh; overflow: auto; box-shadow: 0 24px 60px -20px rgba(0,0,0,.8); }
 .queue.pop[hidden] { display: none; }
 .queue h3 { margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; }
@@ -67,7 +71,8 @@ aside { border-right: 1px solid var(--line); padding: 18px 14px; overflow: auto;
 .chip.mono { font-family: "Geist Mono", monospace; font-size: 12px; }
 .notes { order: 10; flex: 1 1 100%; color: var(--muted); font-size: 12.5px; margin-top: -4px; }
 .notes.s-attention { color: #f08a7a; }
-main { display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr); min-width: 0; min-height: 0; }
+main { display: grid; grid-template-rows: auto 1fr auto auto; grid-template-columns: minmax(0, 1fr); min-width: 0; min-height: 0; }
+main > .notes-panel { border-top: 1px solid var(--line); height: 210px; }
 .bar { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .bar h1 { font-size: 16px; font-weight: 600; margin: 0 8px 0 0; }
 .seg { display: inline-flex; background: rgba(255,255,255,.05); border-radius: 9px; padding: 3px; gap: 2px; }
@@ -135,7 +140,7 @@ input[type=range] { flex: 1; min-width: 0; accent-color: #fff; margin: 0; }
 .job .st { float: right; }
 .job .st.running { color: #e5c07b; } .job .st.waiting { color: #7aa2f7; } .job .st.cancelled { color: var(--muted); }
 .job .cx { color: var(--muted); padding: 0 0 0 8px; font-size: 13px; } .job .cx:hover { color: #fff; } .job .st.done { color: var(--green); } .job .st.failed { color: var(--accent); }
-.renders { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.renders { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; cursor: pointer; }
 .card:hover { border-color: rgba(255,255,255,.25); }
 .card.on { border-color: rgba(255,255,255,.75); }
@@ -187,6 +192,12 @@ input[type=range] { flex: 1; min-width: 0; accent-color: #fff; margin: 0; }
 .step.running i, .steps summary i.running { background: #e5c07b; animation: pulse 1s ease-in-out infinite; }
 .step.failed i { background: var(--accent); } .step.failed { color: #f08a7a; }
 .step span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.msg.event { font-size: 12.5px; color: #c9c9ce; display: flex; gap: 8px; align-items: baseline; background: rgba(199,146,234,.07); border: 1px solid rgba(199,146,234,.25); border-radius: 10px; padding: 7px 10px; }
+.msg.event i { width: 7px; height: 7px; border-radius: 50%; background: #c792ea; flex: none; position: relative; top: -1px; }
+.msg.event.queued { opacity: .6; }
+.msg.event div div { color: var(--muted); }
+.agentsel { font: inherit; font-size: 12px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px; cursor: pointer; }
+.agentsel:hover { color: #fff; border-color: rgba(255,255,255,.3); }
 .msg.system { align-self: center; color: var(--muted); font-size: 12px; }
 .msg.system.divider { align-self: stretch; display: flex; align-items: center; gap: 10px; } .msg.system.divider::before, .msg.system.divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .msg.error { color: #ffb4a8; background: rgba(224,53,31,.1); border: 1px solid rgba(224,53,31,.35); border-radius: 10px; padding: 8px 11px; font-size: 12.5px; white-space: pre-wrap; }
@@ -209,12 +220,13 @@ input[type=range] { flex: 1; min-width: 0; accent-color: #fff; margin: 0; }
 .send.stop { background: rgba(255,255,255,.14); color: #fff; }
 .grip { position: absolute; top: 0; right: -3px; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
 .grip:hover, .grip.on { background: rgba(255,255,255,.12); }
-@media (max-height: 880px) { .lower { height: 220px; } .panel { padding: 12px 18px; } .panel h2 { margin-bottom: 8px; } .matrix td { padding: 2px 14px 2px 0; } .renders { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); } }
+@media (max-height: 880px) { .lower { height: 220px; } .panel { padding: 12px 18px; } .panel h2 { margin-bottom: 8px; } .matrix td { padding: 2px 14px 2px 0; }  main > .notes-panel { height: 170px; } }
 /* Narrow panes (Cube shows the Studio beside a session): one column that scrolls, the videos as a
    strip on top, the file menu on its own row and the renders right under the transport. */
 @media (max-width: 900px) {
   html, body { height: auto; }
   .app { display: flex; flex-direction: column; height: auto; }
+  main { order: 1; } aside.side { order: 2; border-left: 0; border-top: 1px solid var(--line); }
   .director { order: 3; height: 75vh; border-right: 0; border-top: 1px solid var(--line); }
   .grip { display: none; }
   aside { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
@@ -248,6 +260,7 @@ input[type=range] { flex: 1; min-width: 0; accent-color: #fff; margin: 0; }
     <div class="dhead">
       <div class="avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></div>
       <div class="dname"><b>Director</b><span><i></i><em id="dstate" style="font-style:normal">Ready</em></span></div>
+      <select class="agentsel" id="dagent" title="The agent the Director runs on"></select>
       <button class="dbtn" id="dreset" title="New conversation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.4 3.6a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
     </div>
     <div class="msgs" id="msgs"></div>
@@ -257,11 +270,6 @@ input[type=range] { flex: 1; min-width: 0; accent-color: #fff; margin: 0; }
     </div>
     <div class="grip" id="grip" title="Drag to resize"></div>
   </section>
-  <aside>
-    <div class="brand"><svg viewBox="-0.9066 -0.9066 1.8132 1.8132"><path fill="#fff" fill-rule="evenodd" d="M0 -0.7311L0.1919 -0.6643L0.5147 -0.4779L0.6018 -0.4173L0.6300 -0.3674L0.6300 0.3674L0.6018 0.4173L0.5147 0.4779L0.1919 0.6643L0 0.7311L-0.1919 0.6643L-0.5147 0.4779L-0.6018 0.4173L-0.6300 0.3674L-0.6300 -0.3674L-0.6018 -0.4173L-0.5147 -0.4779L-0.1919 -0.6643Z M0 0.0842L0.1494 0.1363L0.4008 0.2814L0.4905 0.3674L0.4008 0.4534L0.1494 0.5985L0 0.6506L-0.1494 0.5985L-0.4008 0.4534L-0.4905 0.3674L-0.4008 0.2814L-0.1494 0.1363Z"/></svg>Cube Studio<button class="qbtn" id="qbtn" title="Render queue"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="arc" cx="18" cy="18" r="15"/></svg><span id="qcount">0</span></button></div>
-    <div class="queue pop" id="queue" hidden></div>
-    <div id="comps"></div>
-  </aside>
   <main>
     <div class="bar" id="bar">
       <h1 id="title">—</h1>
@@ -276,31 +284,32 @@ input[type=range] { flex: 1; min-width: 0; accent-color: #fff; margin: 0; }
       <div class="src"><button id="prevFile" title="Previous file (↑)">‹</button><select id="fileSel" title="What the viewer shows"></select><button id="nextFile" title="Next file (↓)">›</button></div>
     </div>
     <div class="viewer" id="viewer"><div class="fit" id="fit"></div><div class="loading" id="loading">Loading…</div><div class="err" id="err"></div><video class="media" id="vid" playsinline preload="auto"></video><img class="media" id="pic" alt=""></div>
-    <div>
       <div class="transport">
         <button class="play" id="playBtn">▶</button>
         <span class="time" id="time">0.00 / 0.00</span>
         <div class="scrubwrap"><div class="marks" id="marks"></div><input type="range" id="scrub" min="0" max="1" step="0.001" value="0"></div>
         <span class="keys">Space play · ← → frame · ⇧ second · ↑ ↓ file · N note · Esc live</span>
       </div>
-      <div class="lower">
-        <div class="panel notes-panel">
+    <div class="panel notes-panel">
           <h2>Notes</h2>
           <div class="addnote"><textarea id="noteText" placeholder="Note at 0.00 s…  (N)"></textarea><button id="noteBtn">Add</button></div>
           <div id="notes2"></div>
         </div>
-        <div class="panel">
-          <h2>Render</h2>
+  </main>
+  <aside class="side">
+    <div class="brand"><svg viewBox="-0.9066 -0.9066 1.8132 1.8132"><path fill="#fff" fill-rule="evenodd" d="M0 -0.7311L0.1919 -0.6643L0.5147 -0.4779L0.6018 -0.4173L0.6300 -0.3674L0.6300 0.3674L0.6018 0.4173L0.5147 0.4779L0.1919 0.6643L0 0.7311L-0.1919 0.6643L-0.5147 0.4779L-0.6018 0.4173L-0.6300 0.3674L-0.6300 -0.3674L-0.6018 -0.4173L-0.5147 -0.4779L-0.1919 -0.6643Z M0 0.0842L0.1494 0.1363L0.4008 0.2814L0.4905 0.3674L0.4008 0.4534L0.1494 0.5985L0 0.6506L-0.1494 0.5985L-0.4008 0.4534L-0.4905 0.3674L-0.4008 0.2814L-0.1494 0.1363Z"/></svg>Cube Studio<button class="qbtn" id="qbtn" title="Render queue"><svg viewBox="0 0 36 36"><circle class="track" cx="18" cy="18" r="15"/><circle class="arc" cx="18" cy="18" r="15"/></svg><span id="qcount">0</span></button></div>
+    <div class="sect"><div class="queue" id="queue"></div></div>
+    <div class="sect"><h2>Pieces</h2><div id="comps"></div></div>
+        <div class="sect">
+          <h2>Render this piece</h2>
           <table class="matrix" id="jobGrid"></table>
           <div class="lookrow"><select id="lookSel" title="Look: restyle the finished render"><option value="">Original</option></select><button id="lookPrev" title="Preview this look at the playhead">Preview</button></div>
           <div class="lookabout" id="lookAbout"></div>
           <button class="go" id="renderBtn">Render selected</button>
           <div id="jobs"></div>
         </div>
-        <div class="panel"><h2>Renders</h2><div class="renders" id="renders"></div></div>
-      </div>
-    </div>
-  </main>
+    <div class="sect"><h2>Renders</h2><div class="renders" id="renders"></div></div>
+  </aside>
 </div>
 <audio id="audio" preload="auto"></audio>
 <script>
@@ -685,7 +694,7 @@ async function loadQueue() {
     : kind === 'wait'
     ? `<div class="qrow" draggable="true" data-piece="${esc(t.piece)}"><span class="n">${t.position}</span><div><b>${esc(t.title)}</b><small>waiting${queue.order.includes(t.piece) ? ' · ranked' : ''}</small></div><button data-qcancel="${t.id}" title="Take it out of the queue">✕</button></div>`
     : `<div class="qrow"><span class="n">★</span><div><b>${esc(t.title)}</b><small>goes next once its worker queues it</small></div><button data-qunpin="${esc(t.piece)}" title="Unpin">✕</button></div>`;
-  $('queue').innerHTML = `<h3><span>Render queue</span><span>${run.length ? 'busy' : 'idle'}</span></h3>` +
+  $('queue').innerHTML = `<h3><span>Render queue</span><span>${run.length ? 'rendering' : 'idle'}</span></h3>` +
     (run.length + wait.length + queue.pinned.length ? run.map(t => row(t, 'run')).join('') + queue.pinned.map(t => row(t, 'pin')).join('') + wait.map(t => row(t, 'wait')).join('')
       : '<div class="empty">Nothing rendering.</div>');
   dragRows();
@@ -722,14 +731,7 @@ function qbtnUi() {
   $('qbtn').classList.toggle('busy', busy);
   $('qbtn').title = n ? `Render queue: ${busy ? 'rendering' : 'idle'}, ${n} in the queue` : 'Render queue: empty';
 }
-function placeQueue() {
-  const b = $('qbtn').getBoundingClientRect();
-  if (innerWidth > 900) { $('queue').style.left = `${Math.max(8, b.right - 300)}px`; $('queue').style.top = `${b.bottom + 8}px`; $('queue').style.position = 'fixed'; }
-}
-$('qbtn').onclick = e => { e.stopPropagation(); const open = $('queue').hidden; $('queue').hidden = !open; $('qbtn').classList.toggle('open', open); if (open) { placeQueue(); queueSig = ''; loadQueue(); } };
-addEventListener('click', e => { if (!$('queue').hidden && !e.target.closest('#queue, #qbtn')) { $('queue').hidden = true; $('qbtn').classList.remove('open'); } });
-addEventListener('keydown', e => { if (e.key === 'Escape' && !$('queue').hidden) { $('queue').hidden = true; $('qbtn').classList.remove('open'); } }, true);
-addEventListener('resize', () => { if (!$('queue').hidden) placeQueue(); });
+$('qbtn').onclick = () => $('queue').scrollIntoView({ behavior: 'smooth', block: 'start' });
 function nextUi() {
   if (!comp) return;
   const first = queue.order[0] === comp.id;
@@ -751,7 +753,7 @@ setInterval(() => { if (!document.hidden) { load().catch(() => {}); loadNotes().
 // ---- the Director ----------------------------------------------------------------------------------
 // One conversation, streamed from /api/director/stream. Each message carries what is on screen (the piece,
 // format, variant, playhead, and the render being viewed) unless you take the chip off.
-const D = { items: [], byId: new Map(), busy: false, queued: 0, agent: 'claude', attach: true, shown: false };
+const D = { items: [], byId: new Map(), busy: false, queued: 0, agent: 'claude', installed: ['claude'], labels: { claude: 'Claude Code', codex: 'Codex' }, attach: true, shown: false };
 const msgs = $('msgs'), dtext = $('dtext');
 const nearBottom = () => msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 80;
 const ICON_SEND = $('dsend').innerHTML;
@@ -796,6 +798,7 @@ function ctxButtons(it) {
 function itemHtml(it) {
   if (it.role === 'user') return `<div class="msg user${it.queued ? ' queued' : ''}${it.dropped ? ' dropped' : ''}" data-id="${esc(it.id)}">${ctxButtons(it)}${esc(it.text)}</div>`;
   if (it.role === 'assistant') return `<div class="msg assistant${it.pending ? ' pending' : ''}" data-id="${esc(it.id)}">${md(it.text)}</div>`;
+  if (it.role === 'event') return `<div class="msg event${it.queued ? ' queued' : ''}"><i></i><div>${(it.lines || [it.text]).map((l, i) => i ? `<div>${esc(l)}</div>` : esc(l)).join('')}</div></div>`;
   if (it.role === 'error') return `<div class="msg error">${esc(it.text)}</div>`;
   return `<div class="msg system${it.divider ? ' divider' : ''}">${esc(it.text)}</div>`;
 }
@@ -827,10 +830,12 @@ function upsert(it) {
   D.byId.set(it.id, it);
 }
 function dirUi() {
-  const off = !D.agent;
+  const off = !D.installed.includes(D.agent);
+  const opts = Object.keys(D.labels).map(k => `<option value="${k}"${k === D.agent ? ' selected' : ''}${D.installed.includes(k) ? '' : ' disabled'}>${esc(D.labels[k])}${D.installed.includes(k) ? '' : ' (not installed)'}</option>`).join('');
+  if ($('dagent').dataset.sig !== opts) { $('dagent').innerHTML = opts; $('dagent').dataset.sig = opts; }
   $('director').classList.toggle('busy', D.busy);
   $('director').classList.toggle('off', off);
-  $('dstate').textContent = off ? 'Needs Claude Code' : D.busy ? (D.queued ? `Working · ${D.queued} waiting` : 'Working…') : 'Ready';
+  $('dstate').textContent = off ? `Needs ${D.labels[D.agent] || D.agent}` : D.busy ? (D.queued ? `Working · ${D.queued} waiting` : 'Working…') : 'Ready';
   const stop = D.busy && !dtext.value.trim();
   $('dsend').classList.toggle('stop', stop);
   $('dsend').innerHTML = stop ? ICON_STOP : ICON_SEND;
@@ -846,7 +851,7 @@ function connect() {
   const es = new EventSource('/api/director/stream');
   es.onmessage = e => {
     const ev = JSON.parse(e.data);
-    if (ev.type === 'snapshot') { D.items = []; D.byId.clear(); ev.items.forEach(upsert); Object.assign(D, { busy: ev.busy, queued: ev.queued, agent: ev.agent }); renderChat(); }
+    if (ev.type === 'snapshot') { D.items = []; D.byId.clear(); ev.items.forEach(upsert); Object.assign(D, { busy: ev.busy, queued: ev.queued, agent: ev.agent, installed: ev.installed, labels: ev.labels }); renderChat(); }
     else if (ev.type === 'item') { upsert(ev.item); renderChat(); }
     else if (ev.type === 'remove') { D.items = D.items.filter(x => x.id !== ev.id); D.byId.delete(ev.id); renderChat(); }
     else if (ev.type === 'delta') {
@@ -854,7 +859,7 @@ function connect() {
       it.text += ev.text;
       const el = msgs.querySelector(`.msg[data-id="${CSS.escape(ev.id)}"]`);
       if (el) { const stick = nearBottom(); el.innerHTML = md(it.text); if (stick) msgs.scrollTop = msgs.scrollHeight; } else renderChat();
-    } else if (ev.type === 'status') Object.assign(D, { busy: ev.busy, queued: ev.queued, agent: ev.agent });
+    } else if (ev.type === 'status') Object.assign(D, { busy: ev.busy, queued: ev.queued, agent: ev.agent, installed: ev.installed, labels: ev.labels });
     dirUi();
   };
   es.onerror = () => { $('dstate').textContent = 'Reconnecting…'; };
@@ -875,6 +880,12 @@ dtext.addEventListener('keydown', e => {
 });
 $('dsend').onclick = () => { if ($('dsend').classList.contains('stop')) fetch('/api/director/stop', { method: 'POST', body: '{}' }); else say(dtext.value); };
 $('dreset').onclick = () => { if (confirm('Start a new conversation with the Director? The current one stays in the history above.')) fetch('/api/director/reset', { method: 'POST', body: '{}' }); };
+$('dagent').onchange = e => {
+  const a = e.target.value, label = D.labels[a] || a;
+  if (a === D.agent) return;
+  if (!confirm(`Switch the Director to ${label}? It starts a new conversation; this one stays above.`)) { e.target.value = D.agent; return; }
+  fetch('/api/director/agent', { method: 'POST', body: JSON.stringify({ agent: a }) });
+};
 $('ctxbar').addEventListener('click', e => { if (e.target.id === 'ctxx') { D.attach = !D.attach; ctxUi(); } });
 // a piece named in the chat, or a message's context chip, opens that piece (at that moment)
 msgs.addEventListener('click', e => {

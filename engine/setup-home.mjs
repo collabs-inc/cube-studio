@@ -17,6 +17,9 @@ at \`${APP}\`; never edit them there, because an update replaces that folder. A 
 - Stills: \`node ${APP}/engine/render.mjs videos/<piece> stills 0,2.5,5 --fmt 9x16 --pr 0.5\`
 - Final renders, one at a time through the machine's queue:
   \`node ${APP}/engine/queue.mjs -- node ${APP}/engine/batch.mjs videos/<piece> --jobs 16x9:,9x16: --parallel 2\`
+- Node scripts (a piece's \`audio.mjs\`) import \`../../engine/…\`; run them with the app's overlay so a file this
+  project doesn't have comes from the app: \`NODE_OPTIONS=--import=file://${APP}/engine/overlay.mjs node videos/<piece>/audio.mjs …\`
+  (the Director and its workers get this automatically).
 - How to make a piece: \`${APP}/director/DIRECTOR.md\`, then \`${APP}/director/WORKER.md\`.
 ${END}`;
 

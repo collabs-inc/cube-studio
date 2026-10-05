@@ -24,7 +24,7 @@ import path from 'node:path';
 import { spawn, execFileSync, spawnSync } from 'node:child_process';
 import FFMPEG from 'ffmpeg-static';
 import { APP, HOME, STATE, projects, resolveIn, engineScript } from './paths.mjs';
-import { createDirector } from './director.mjs';
+import { createDirector, nodeOptions } from './director.mjs';
 
 const ROOT = APP;
 const PORT = Number(process.env.PORT || 4173);
@@ -247,7 +247,7 @@ function compositions() {
   }
   cache.roots = new Map(cos.map(c => [c.name, c.root]));
   for (const c of list.filter(Boolean)) { const src = thumbSource(c); c.thumb = src ? `/api/thumb?key=${encodeURIComponent(c.key)}&v=${Math.round(src.mtime)}` : null; }
-  // pipeline order: what needs Paul, then what's being made, then what's ready, then what's shipped
+  // pipeline order: what needs you, then what's being made, then what's ready, then what's shipped
   const ORDER = { attention: 0, cooking: 1, queued: 2, rendering: 3, ready: 4, main: 5 };
   cache = { at: Date.now(), list: list.filter(Boolean).sort((a, b) => ORDER[a.status] - ORDER[b.status] || b.changed - a.changed) };
   cache.roots = new Map(cos.map(c => [c.name, c.root]));
@@ -310,7 +310,7 @@ function runSteps(job, steps, root) {
     if (!s) { job.status = 'done'; job.ended = Date.now(); running = null; cache.at = 0; pump(); return; }
     // queue behind any other render on the machine (agents' batches take the same lock)
     // own process group, so cancelling stops flock and the render under it
-    const p = spawn(process.execPath, [path.join(ROOT, 'engine', 'queue.mjs'), '--piece', job.comp.split('/').pop(), '--', process.execPath, s[0], ...s[1]], { cwd: root, env: { ...process.env, ...s[2] }, detached: true });
+    const p = spawn(process.execPath, [path.join(ROOT, 'engine', 'queue.mjs'), '--piece', job.comp.split('/').pop(), '--', process.execPath, s[0], ...s[1]], { cwd: root, env: { ...process.env, NODE_OPTIONS: nodeOptions(), ...s[2] }, detached: true });
     procs.set(job.id, p);
     job.status = 'waiting';                             // until the lock is ours and the step speaks
     const log = d => { const t = String(d); if (job.status === 'waiting' && !/^queue: .* is #\d/m.test(t)) job.status = 'running'; job.log = (job.log + t).slice(-4000); };
@@ -398,6 +398,43 @@ http.createServer((req, res) => {
 
 // last line of defence: a dev server should log and keep serving rather than exit
 process.on('uncaughtException', e => console.error('studio: uncaught', e));
+// ---- the Director supervises the render queue ---------------------------------------------------------
+// Every ticket queue.mjs runs (the Studio's renders and the agents' batches alike, in any project) ends with a
+// line in <state>/queue-history.jsonl. Each batch or look that ends goes to the Director as an event, with what
+// it wrote, so one Director can QA everything without anyone asking.
+const HISTORY = path.join(STATE, 'queue-history.jsonl');
+let historyAt = (() => { try { return fs.statSync(HISTORY).size; } catch { return 0; } })();
+function renderEnded(t) {
+  const m = /(?:^|\s)(\S*\/)?videos\/([^/\s]+)/.exec(t.cmd) || [];
+  const id = t.piece !== 'unknown' ? t.piece : m[2];
+  const root = (t.cwd && checkouts().find(co => t.cwd === co.root || t.cwd.startsWith(co.root + '/'))) || null;
+  const where = root ? `${root.name}/${id}` : id;
+  const kind = /look\.mjs/.test(t.cmd) ? 'look' : 'render';
+  const outcome = t.how === 'cancelled' ? 'was cancelled' : t.code === 0 ? 'finished' : `failed (exit ${t.code})`;
+  let wrote = [];
+  if (root && t.code === 0) {
+    const dir = path.join(root.root, 'videos', id, 'renders');
+    try { wrote = fs.readdirSync(dir).filter(f => f.endsWith('.mp4') && (stat(path.join(dir, f))?.mtimeMs || 0) >= t.queued); } catch {}
+  }
+  const mins = Math.max(1, Math.round((t.ended - t.queued) / 60000));
+  director.event(`${kind === 'look' ? 'Look' : 'Render'} ${outcome} · ${where}`,
+    `${kind} of ${where} ${outcome} after ${mins} min${root ? ` (folder ${path.join(root.root, 'videos', id)})` : ''}` +
+    `${wrote.length ? `; wrote ${wrote.join(', ')}` : ''}. Command: ${t.cmd}`);
+}
+fs.watchFile(HISTORY, { interval: 2000 }, cur => {
+  if (cur.size < historyAt) historyAt = 0;            // rotated or cleared
+  if (cur.size === historyAt) return;
+  const fd = fs.openSync(HISTORY, 'r'), buf = Buffer.alloc(cur.size - historyAt);
+  fs.readSync(fd, buf, 0, buf.length, historyAt); fs.closeSync(fd);
+  const text = buf.toString('utf8'), end = text.lastIndexOf('\n') + 1;
+  historyAt += Buffer.byteLength(text.slice(0, end));
+  for (const line of text.slice(0, end).split('\n')) {
+    if (!line) continue;
+    let t; try { t = JSON.parse(line); } catch { continue; }
+    if (/(batch|look)\.mjs/.test(t.cmd || '')) { cache.at = 0; renderEnded(t); }
+  }
+});
+
 // Cube stops an app with SIGTERM: end the Director's running turn with it
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { director.shutdown(); process.exit(0); });
 
@@ -421,6 +458,7 @@ function route(req, res) {
   });
   if (p === '/api/director/stop' && req.method === 'POST') return send(res, 200, { stopped: director.stop() });
   if (p === '/api/director/reset' && req.method === 'POST') { director.reset(); return send(res, 200, { ok: true }); }
+  if (p === '/api/director/agent' && req.method === 'POST') return body(req, res, b => send(res, 200, director.setAgent(String(b.agent || ''))));
   if (p === '/api/studio') return send(res, 200, { home: HOME, state: STATE, app: APP, projects: projects(), director: director.status() });
   if (p === '/api/jobs') return send(res, 200, jobs.slice(-20).reverse());
   if (p === '/api/jobs/cancel' && req.method === 'POST') return body(req, res, b => {
