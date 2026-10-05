@@ -1,0 +1,24 @@
+{
+  "title": "Cube 24/7 loop",
+  "description": "Seamless 10 s loop: the cube turns once while the sky runs a full day",
+  "page": "index.html",
+  "duration": 10,
+  "fps": 60,
+  "loop": true,
+  "formats": [
+    "16x9",
+    "9x16",
+    "1x1",
+    "4x5"
+  ],
+  "variants": [
+    "social",
+    "clean"
+  ],
+  "soundtrack": {
+    "script": "audio.mjs",
+    "wav": "soundtrack.wav",
+    "gain": -3
+  },
+  "name": "cube-24-7"
+}

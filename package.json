@@ -1,0 +1,18 @@
+{
+  "name": "cube-studio",
+  "private": true,
+  "type": "module",
+  "description": "Cube Studio: make motion pieces with a Director agent, rendered deterministically from HTML/WebGL in headless Chromium.",
+  "scripts": {
+    "setup": "npx playwright-core install chromium-headless-shell && node engine/setup-home.mjs",
+    "studio": "node engine/studio.mjs",
+    "render": "node engine/render.mjs",
+    "batch": "node engine/batch.mjs"
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "geist": "1.7.2",
+    "playwright-core": "1.62.1",
+    "three": "0.164.1"
+  }
+}

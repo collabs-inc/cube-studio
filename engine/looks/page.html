@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@font-face { font-family: "Geist Mono"; src: url(/brand/fonts/GeistMono-Medium.woff2) format("woff2"); font-weight: 500; }
+html, body { margin: 0; background: #000; overflow: hidden; }
+canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="module">
+// Runs one look over frames: setup(look, w, h), then draw(url, t) per frame; engine/look.mjs screenshots the canvas.
+import { LOOKS } from '/looks/looks.js';
+const cv = document.getElementById('c');
+const gl = cv.getContext('webgl2', { preserveDrawingBuffer: true, antialias: false });
+let prog, U, srcTex, glyphTex, look;
+
+const VERT = `#version 300 es
+in vec2 a; out vec2 v_uv;
+void main() { v_uv = vec2(a.x * 0.5 + 0.5, 0.5 - a.y * 0.5); gl_Position = vec4(a, 0.0, 1.0); }`;
+function compile(type, text) {
+  const s = gl.createShader(type); gl.shaderSource(s, text); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+const tex = () => { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); return t; };
+
+// glyph atlas for the terminal look: one 48 × 84 cell per character, white on black
+async function atlas(chars) {
+  await document.fonts.load('500 64px "Geist Mono"');
+  const cw = 48, ch = 84, c = document.createElement('canvas');
+  c.width = cw * chars.length; c.height = ch;
+  const x = c.getContext('2d');
+  x.fillStyle = '#000'; x.fillRect(0, 0, c.width, c.height);
+  x.fillStyle = '#fff'; x.font = '500 64px "Geist Mono"'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  [...chars].forEach((g, i) => x.fillText(g, i * cw + cw / 2, ch / 2 + 2));
+  return c;
+}
+
+window.setup = async (name, w, h) => {
+  look = LOOKS[name];
+  if (!look) throw new Error(`unknown look ${name}`);
+  cv.width = w; cv.height = h; cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  gl.viewport(0, 0, w, h);
+  prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT)); gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, look.frag));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const a = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+  U = n => gl.getUniformLocation(prog, n);
+  gl.uniform2f(U('u_res'), w, h); gl.uniform1f(U('u_k'), Math.min(w, h) / 1080);
+  srcTex = tex();
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, srcTex); gl.uniform1i(U('u_src'), 0);
+  if (look.glyphs) {
+    glyphTex = tex(); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, glyphTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, await atlas(look.glyphs));
+    gl.uniform1i(U('u_glyphs'), 1); gl.uniform1f(U('u_n'), [...look.glyphs].length);
+  }
+  return true;
+};
+
+window.draw = async (url, t) => {
+  const img = new Image(); img.src = url; await img.decode();
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, srcTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+  gl.uniform1f(U('u_t'), t);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  gl.finish();
+  return true;
+};
+window.lookReady = true;
+</script>
+</body>
+</html>

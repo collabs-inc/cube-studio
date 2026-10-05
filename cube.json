@@ -1,0 +1,8 @@
+{
+  "name": "Studio",
+  "description": "Make motion pieces with a Director agent: live preview, a render queue and your renders.",
+  "icon": "studio/icon.svg",
+  "platforms": ["linux"],
+  "install": "sh install.sh",
+  "start": "node engine/studio.mjs"
+}
