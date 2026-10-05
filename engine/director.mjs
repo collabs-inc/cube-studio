@@ -14,6 +14,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 
 const MAX_ITEMS = 400;           // what a snapshot carries; the file keeps everything
 const short = (s, n) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
@@ -111,6 +112,9 @@ function codexSummary(it) {
 }
 export const agentLabels = Object.fromEntries(Object.entries(AGENTS).map(([k, a]) => [k, a.label]));
 
+// The app's own ffmpeg, so the Director and its workers can QA renders from a project without node_modules.
+const ffmpegPath = () => { try { return process.env.FFMPEG || createRequire(import.meta.url)('ffmpeg-static'); } catch { return 'ffmpeg'; } };
+
 // Every node the Director (or a worker it starts) runs gets the engine overlay (overlay.mjs).
 export const nodeOptions = () => [process.env.NODE_OPTIONS, `--import=${new URL('./overlay.mjs', import.meta.url).href}`].filter(Boolean).join(' ');
 
@@ -188,7 +192,7 @@ export function createDirector({ STATE, HOME, APP, port }) {
     const model = name === 'claude' ? process.env.STUDIO_DIRECTOR_MODEL : process.env.STUDIO_CODEX_MODEL;
     const p = child = spawn(bin, A.args({ prompt, session, brief: brief(), model }), {
       cwd: HOME, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, STUDIO_APP: APP, STUDIO_HOME: HOME, STUDIO_STATE: STATE, STUDIO_URL: `http://127.0.0.1:${port}`, NODE_OPTIONS: nodeOptions() },
+      env: { ...process.env, STUDIO_APP: APP, STUDIO_HOME: HOME, STUDIO_STATE: STATE, STUDIO_URL: `http://127.0.0.1:${port}`, NODE_OPTIONS: nodeOptions(), FFMPEG: ffmpegPath() },
     });
 
     const texts = new Map(), tools = new Map();

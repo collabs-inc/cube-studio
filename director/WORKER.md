@@ -20,7 +20,7 @@ The Director has already made your worktree and branch. Don't start a Studio: th
 
 - Final batches run through the machine-wide queue: `node <app>/engine/queue.mjs -- node <app>/engine/batch.mjs videos/<piece> --jobs … --audio … --gain … --parallel 2`.
 - Wait for your batch in the foreground (a loop with `sleep 60`), then QA and commit before you finish.
-- QA every MP4: a contact sheet of frames; loudness with ffmpeg `ebur128` (−14 LUFS); for loops, check that the last frame flows into the first.
+- QA every MP4: a contact sheet of frames; loudness with ffmpeg `ebur128` at `$FFMPEG` (−14 LUFS); for loops, check that the last frame flows into the first.
 
 ## Finishing
 
