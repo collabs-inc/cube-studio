@@ -23,7 +23,7 @@ Uninstalling the app leaves all of these in place. The Director runs Claude Code
 
 ## How a Cube app is put together
 
-This repository is meant to be read as a template. Everything Cube asks of an app is in four files:
+This repository is meant to be read as a template, shared with [Cube Scout](https://github.com/collabs-inc/cube-scout) and [Cube Write](https://github.com/collabs-inc/cube-write). Everything Cube asks of an app is in four files:
 
 - **`cube.json`** names the app and says how to install and start it:
   ```json
