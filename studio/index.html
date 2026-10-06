@@ -192,7 +192,7 @@ const STATUS_COLOR = { rendering: 'orange', attention: 'red', ready: 'green', qu
 const esc = v => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const audio = $('audio'), vid = $('vid'), pic = $('pic');
 let comps = [], comp = null, fmt = '16x9', variant = '', frame = null;
-let t = 0, drawn = -1, playing = false, loop = true, sound = false, last = 0, ready = false;
+let nextDraw = 0, t = 0, drawn = -1, playing = false, loop = true, sound = false, last = 0, ready = false;
 let view = null;                 // the render on screen, or null for the live preview
 const isVideo = f => f.file.endsWith('.mp4');
 // the mtime makes a re-encoded render a new URL, so a player never asks for byte ranges of the old file
@@ -260,9 +260,14 @@ function select(key) {
   $('title').textContent = comp.title;
   audio.pause();
   if (comp.audioUrl) { audio.src = comp.audioUrl; audio.volume = Math.min(1, 10 ** (comp.audioGain / 20)); } else audio.removeAttribute('src');
-  view = null; unload();         // a composition opens on its live preview
+  view = null; unload();
   notes = []; notesSig = ''; renderNotes(); loadNotes();
-  info(); highlight(); renderGrid(); renderFiles(); open(); hash();
+  info(); highlight(); renderGrid(); renderFiles();
+  // a finished piece (ready or on main) opens on its render, which the browser decodes off the main thread;
+  // the live preview, which runs the whole piece on the page's thread, opens only when you ask for it
+  const r = (comp.status === 'ready' || comp.status === 'main') && renderFor(fmt);
+  if (r) show(r); else { closeLive(); open(); }
+  hash();
 }
 function seg(el, items, cur, label, pick) {
   el.innerHTML = ''; el.style.display = items.length > 1 ? '' : 'none';
@@ -270,12 +275,22 @@ function seg(el, items, cur, label, pick) {
 }
 function controls() {
   // format and variant drive the live preview, so picking one while a render is on screen goes back to live
-  seg($('formats'), comp.formats, fmt, f => LABEL[f], f => { fmt = f; if (view) show(null); controls(); open(); });
-  seg($('variants'), comp.variants, variant, v => v || 'default', v => { variant = v; if (view) show(null); controls(); open(); });
+  const repick = () => { const r = view && renderFor(fmt); if (r) show(r); else if (view) show(null); else open(); controls(); };
+  seg($('formats'), comp.formats, fmt, f => LABEL[f], f => { fmt = f; repick(); });
+  seg($('variants'), comp.variants, variant, v => v || 'default', v => { variant = v; repick(); });
   $('loopBtn').classList.toggle('on', loop);
   $('soundBtn').classList.toggle('on', sound); $('soundBtn').disabled = !view && !comp.audioUrl;
   $('scrub').step = 1 / comp.fps;
 }
+// the newest MP4 render of this format (and variant), if there is one
+function renderFor(f) {
+  const vids = comp.renders.filter(x => isVideo(x));
+  const name = x => x.file.replace(/\.mp4$/, '');
+  const exact = vids.filter(x => name(x).endsWith('-' + f + (variant ? '-' + variant : '')) || name(x).endsWith('-' + f));
+  return exact.sort((a, b) => b.mtime - a.mtime)[0] || null;
+}
+// drop the live preview's page entirely while a render is on screen, so it costs nothing
+function closeLive() { if (frame) { frame.remove(); frame = null; } ready = false; drawn = -1; }
 // a fresh iframe per format/variant, so a stale page can never answer reelReady
 function open() {
   ready = false; drawn = -1; $('loading').style.display = 'grid'; clearErr();
@@ -283,7 +298,10 @@ function open() {
   if (frame) frame.remove();
   frame = document.createElement('iframe');
   frame.width = w; frame.height = h; frame.style.width = w + 'px'; frame.style.height = h + 'px';
-  frame.src = `${comp.url}?fmt=${fmt}&variant=${encodeURIComponent(variant)}&pr=1&mb=1`;
+  // the page is scaled down to fit the viewer, so draw it at about the size it is shown (pixel ratio pr)
+  const v = $('viewer').getBoundingClientRect(), shown = Math.min((v.width - 40) / w, (v.height - 40) / h) * (devicePixelRatio || 1);
+  const pr = Math.max(0.35, Math.min(1, Math.ceil(shown * 20) / 20 || 1));
+  frame.src = `${comp.url}?fmt=${fmt}&variant=${encodeURIComponent(variant)}&pr=${pr}&mb=1`;
   $('fit').appendChild(frame);
   fit();
 }
@@ -302,12 +320,14 @@ function show(f) {
   view = f;
   if (!f) {                        // back to live, at the same moment
     t = Math.min(at, comp.duration - 1 / comp.fps); drawn = -1;
+    if (!frame) open();
     if (run) syncAudio();
   } else if (isVideo(f)) {
+    closeLive();
     vid.loop = loop; vid.muted = !sound;
     vid.onloadedmetadata = () => { vid.currentTime = Math.min(at, Math.max(0, vid.duration - 1 / comp.fps)); if (run) vid.play().catch(() => {}); };
     vid.src = fileSrc(f);
-  } else { pic.src = fileSrc(f); playing = false; }
+  } else { closeLive(); pic.src = fileSrc(f); playing = false; }
   viewUi(); hash();
 }
 function viewUi() {
@@ -345,7 +365,7 @@ function tick(now) {
       }
       if (sound && !audio.paused && Math.abs(audio.currentTime - t) > 0.08) audio.currentTime = t;
     }
-    if (ready && t !== drawn) { try { w.renderFrame(t); drawn = t; } catch (e) { console.error(e); previewError(`renderFrame(${t.toFixed(3)}): ${(e && e.stack) || e}`); drawn = t; } }
+    if (ready && t !== drawn && now >= nextDraw) { try { const a = performance.now(); w.renderFrame(t); drawn = t; const cost = performance.now() - a; nextDraw = cost > 24 ? now + cost : 0; } catch (e) { console.error(e); previewError(`renderFrame(${t.toFixed(3)}): ${(e && e.stack) || e}`); drawn = t; } }
   }
   const still = view && !isVideo(view);
   $('scrub').max = dur || 1; $('scrub').value = still ? 0 : t;
@@ -477,8 +497,10 @@ function seek(n) {
     else { t = n.t; playing = false; show(f); }
     return;
   }
-  if (view) show(null);
-  if (n.fmt && n.fmt !== fmt && comp.formats.includes(n.fmt)) { fmt = n.fmt; controls(); open(); }
+  const refmt = n.fmt && n.fmt !== fmt && comp.formats.includes(n.fmt);
+  if (refmt) fmt = n.fmt;
+  if (view) show(null); else if (refmt) open();
+  if (refmt) controls();
   t = Math.min(n.t, comp.duration - 1 / comp.fps); playing = false;
 }
 addEventListener('click', async e => {
