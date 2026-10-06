@@ -140,6 +140,8 @@ function serveThumb(req, res, url) {
 
 // ---- notes ------------------------------------------------------------------------------------------
 const notesDir = () => path.join(STATE, 'notes');
+// The file name keeps only [\w.-]: a worktree's checkout name "<project>~<folder>" becomes "<project>_<folder>".
+// Existing notes files rely on that, so keep the mapping.
 const notesFile = key => path.join(notesDir(), key.replace('/', '__').replace(/[^\w.-]/g, '_') + '.json');
 function readNotes(key) { try { return JSON.parse(fs.readFileSync(notesFile(key), 'utf8')); } catch { return []; } }
 function writeNotes(key, list) {
@@ -425,7 +427,16 @@ http.createServer((req, res) => {
     console.error('studio:', e);
     if (!res.headersSent) send(res, 500, { error: String(e) }); else res.destroy();
   }
-}).listen(PORT, '127.0.0.1', () => console.log(`Cube Studio → http://127.0.0.1:${PORT}`));
+}).listen(PORT, '127.0.0.1', () => {
+  console.log(`Cube Studio → http://127.0.0.1:${PORT}`);
+  // where other programs on this machine find the running Studio (Cube picks the port): <state>/server.json
+  try {
+    fs.mkdirSync(STATE, { recursive: true });
+    const f = path.join(STATE, 'server.json'), tmp = f + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify({ url: URL_SELF, port: PORT, pid: process.pid, started: new Date().toISOString() }, null, 2));
+    fs.renameSync(tmp, f);
+  } catch (e) { console.error('studio: no server.json', e.message); }
+});
 
 // last line of defence: a dev server should log and keep serving rather than exit
 process.on('uncaughtException', e => console.error('studio: uncaught', e));
