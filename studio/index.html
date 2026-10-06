@@ -406,7 +406,8 @@ function renderFiles() {
 }
 function card(x) {
   const c = document.createElement('div'); c.className = 'card'; c.dataset.file = x.file; c.dataset.key = fileKey(x); c.title = 'Open in the viewer';
-  const media = isVideo(x) ? `<video src="${fileSrc(x)}#t=1" muted preload="metadata" playsinline></video>` : `<img src="${fileSrc(x)}" alt="">`;
+  // a poster, not a <video>: each preloading <video> holds one of the browser's few connections to the Studio
+  const media = isVideo(x) ? `<img src="/api/thumb?key=${encodeURIComponent(comp.key)}&file=${encodeURIComponent(x.file)}&v=${Math.round(x.mtime)}" alt="" loading="lazy">` : `<img src="${fileSrc(x)}" alt="" loading="lazy">`;
   c.innerHTML = `${media}<div><span title="${x.file}">${x.file}</span><a href="${x.url}?download=1">${(x.size / 1e6).toFixed(1)} MB ↓</a></div>`;
   c.onclick = e => { if (!e.target.closest('a')) show(comp.renders.find(y => y.file === x.file) || x); };
   return c;

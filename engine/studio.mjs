@@ -19,6 +19,8 @@
 // on each chosen format's MP4 (→ <render>-<look>.mp4), and POST /api/look-still renders one frame for a preview.
 // Studio jobs run under the machine-wide render lock (<state>/render.lock), like the agents' batches.
 import http from 'node:http';
+import zlib from 'node:zlib';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, execFileSync, spawnSync } from 'node:child_process';
@@ -127,10 +129,13 @@ function thumbSource(c) {
 }
 function serveThumb(req, res, url) {
   const c = compositions().find(x => x.key === url.searchParams.get('key'));
-  const src = c && thumbSource(c);
+  // ?file=<render> is that render's poster (the renders list); without it, the piece's thumbnail (the sidebar)
+  const want = url.searchParams.get('file'), r = c && want && c.renders.find(x => x.file === want && x.file.endsWith('.mp4'));
+  const src = r ? { file: path.join(rootOf(c.checkout), 'videos', c.id, 'renders', r.file), mtime: r.mtime, video: true, t: (c.duration || 10) * 0.45, tag: r.file }
+    : c && thumbSource(c);
   if (!src) return send(res, 404, 'no thumbnail', 'text/plain');
   const dir = path.join(STATE, 'thumbs'); fs.mkdirSync(dir, { recursive: true });
-  const out = path.join(dir, `${c.key.replace(/[^\w-]+/g, '_')}-${Math.round(src.mtime)}.jpg`);
+  const out = path.join(dir, `${(c.key + (src.tag ? '/' + src.tag : '')).replace(/[^\w-]+/g, '_')}-${Math.round(src.mtime)}.jpg`);
   const done = () => { res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'max-age=86400' }); fs.createReadStream(out).pipe(res); };
   if (fs.existsSync(out)) return done();
   const a = ['-hide_banner', '-loglevel', 'error', '-y', ...(src.video ? ['-ss', String(src.t)] : []), '-i', src.file, '-frames:v', '1', '-vf', 'scale=240:-2', '-q:v', '4', out];
@@ -386,6 +391,31 @@ addEventListener('error',function(e){s((e.error&&e.error.stack)||e.message+' at 
 addEventListener('unhandledrejection',function(e){var r=e.reason;s('unhandled rejection: '+((r&&r.stack)||r))});})();</script>`;
 const inject = html => (/<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, m => m + REPORTER) : REPORTER + html);
 
+// ---- caching and compression ---------------------------------------------------------------------------
+// The Studio is often reached through a port forward, so bytes and round trips are what make the viewer slow.
+// Files are revalidated (ETag, 304) instead of re-sent, a versioned URL (?v=<mtime>) is cached for good, and
+// text is gzipped. The gzip of a file is kept in memory per path and mtime.
+const COMPRESSIBLE = /^(text\/|application\/json|image\/svg)/;
+const gz = new Map(); let gzBytes = 0;
+function gzipOf(key, buf) {
+  const hit = gz.get(key); if (hit) return hit;
+  const z = zlib.gzipSync(buf, { level: 6 });
+  if (gzBytes > 64e6) { gz.clear(); gzBytes = 0; }
+  gz.set(key, z); gzBytes += z.length; return z;
+}
+const fresh = (req, etag) => (req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(etag);
+// a whole body: 304 when the browser has it, gzipped when it can take it
+function sendBody(req, res, buf, headers, key) {
+  if (fresh(req, headers.etag)) { res.writeHead(304, { etag: headers.etag, 'cache-control': headers['cache-control'] }); return res.end(); }
+  if (buf.length > 1024 && COMPRESSIBLE.test(headers['content-type'] || '') && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
+    const z = gzipOf(key, buf);
+    res.writeHead(200, { ...headers, 'content-encoding': 'gzip', vary: 'accept-encoding', 'content-length': z.length });
+    return res.end(req.method === 'HEAD' ? undefined : z);
+  }
+  res.writeHead(200, { ...headers, 'content-length': buf.length });
+  res.end(req.method === 'HEAD' ? undefined : buf);
+}
+
 // The Studio's own page and assets come from the app; /wt/<checkout>/… from that checkout, with the app's
 // engine/, brand/ and node_modules/ behind the checkout's own (resolveIn).
 const APP_PATHS = /^\/(studio|brand|engine|kit|node_modules)\//;
@@ -406,12 +436,21 @@ function serveFile(req, res, url, p) {
   if (wt && REWRITE.test(file)) {
     let text;
     try { text = fs.readFileSync(file, 'utf8'); } catch { return send(res, 404, 'not found', 'text/plain'); }
-    const out = rewrite(text, wt);
-    return send(res, 200, path.extname(file) === '.html' ? inject(out) : out, TYPES[path.extname(file)]);
+    const out = rewrite(text, wt), body = Buffer.from(path.extname(file) === '.html' ? inject(out) : out);
+    const etag = `"${crypto.createHash('sha1').update(body).digest('base64url').slice(0, 20)}"`;
+    return sendBody(req, res, body, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-cache', etag }, `${file}|${wt}|${etag}`);
   }
   const size = st.size;
-  const headers = { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream', 'accept-ranges': 'bytes', 'cache-control': 'no-store' };
+  const etag = `"${size.toString(36)}-${Math.round(st.mtimeMs).toString(36)}"`;
+  // a versioned URL (?v=<mtime>) never changes; anything else is checked with the server on every use
+  const cache = url.searchParams.has('v') ? 'max-age=31536000, immutable' : 'no-cache';
+  const headers = { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream', 'accept-ranges': 'bytes', 'cache-control': cache, etag };
   if (url.searchParams.has('download')) headers['content-disposition'] = `attachment; filename="${path.basename(file)}"`;
+  else if (!req.headers.range && size < 8e6 && COMPRESSIBLE.test(headers['content-type'])) {
+    let buf; try { buf = fs.readFileSync(file); } catch { return send(res, 404, 'not found', 'text/plain'); }
+    return sendBody(req, res, buf, headers, `${file}|${etag}`);
+  }
+  if (fresh(req, etag) && !req.headers.range) { res.writeHead(304, { etag, 'cache-control': cache }); return res.end(); }
   const range = req.headers.range ? byteRange(req.headers.range, size) : undefined;
   if (range === null) { res.writeHead(416, { ...headers, 'content-range': `bytes */${size}` }); return res.end(); }
   if (range) headers['content-range'] = `bytes ${range[0]}-${range[1]}/${size}`;
