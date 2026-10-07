@@ -211,8 +211,9 @@ function piece(co, id, procs, failed) {
   try { m = JSON.parse(fs.readFileSync(path.join(dir, 'comp.json'), 'utf8')); } catch (e) { console.error(`studio: skipping ${co.name}/${id}: ${e.message}`); return null; }
   const base = `/wt/${co.name}/videos/${id}`;
   const rdir = path.join(dir, 'renders');
+  // an empty file is an encode that failed or hasn't written anything yet, not a render
   const renders = (fs.existsSync(rdir) ? fs.readdirSync(rdir) : []).filter(f => /\.(mp4|jpg|png)$/.test(f)).sort()
-    .map(f => [f, stat(path.join(rdir, f))]).filter(([, st]) => st).map(([f, st]) => ({ file: f, url: `${base}/renders/${f}`, size: st.size, mtime: st.mtimeMs }));
+    .map(f => [f, stat(path.join(rdir, f))]).filter(([, st]) => st && st.size > 0).map(([f, st]) => ({ file: f, url: `${base}/renders/${f}`, size: st.size, mtime: st.mtimeMs }));
   // preview sound: the raw soundtrack if it has been generated (gain applied in the player), else the reference render
   const wav = m.soundtrack && fs.existsSync(path.join(dir, m.soundtrack.wav));
   const ref = m.audio && fs.existsSync(path.join(dir, m.audio));
